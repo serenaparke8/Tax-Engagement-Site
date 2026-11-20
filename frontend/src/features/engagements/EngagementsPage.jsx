@@ -69,9 +69,6 @@ function ClientSelection({ clients, selectedClient, onSelect, onChange }) {
 
 function EngagementEditor({ kind, engagement, clients, taxYears, onCancel, onSave }) {
   const creating = kind === 'create'
-  const availableReturnTypes = engagement && !returnTypes.includes(engagement.return_type)
-    ? [engagement.return_type, ...returnTypes]
-    : returnTypes
   const [selectedClient, setSelectedClient] = useState(null)
   const [values, setValues] = useState(creating ? emptyDetails : {
     tax_year: String(engagement.tax_year),
@@ -82,6 +79,9 @@ function EngagementEditor({ kind, engagement, clients, taxYears, onCancel, onSav
   })
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const selectedReturnType = returnTypes.includes(values.return_type)
+    ? values.return_type
+    : values.return_type === 'Individual' ? 'Individual (1040)' : ''
 
   function update(field, value) {
     setValues((current) => ({ ...current, [field]: value }))
@@ -128,7 +128,7 @@ function EngagementEditor({ kind, engagement, clients, taxYears, onCancel, onSav
         <form className="client-form engagement-form" onSubmit={submit}>
           <div className="form-row">
             <div><label htmlFor="tax-year">Tax year <span>Required</span></label><select id="tax-year" value={values.tax_year} onChange={(event) => update('tax_year', event.target.value)} required><option value="">Select tax year</option>{taxYears.map((year) => <option key={year} value={year}>{year}</option>)}</select></div>
-            <div><label htmlFor="return-type">Return type <span>Required</span></label><select id="return-type" value={values.return_type} onChange={(event) => update('return_type', event.target.value)} required><option value="">Select return type</option>{availableReturnTypes.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
+            <div><label htmlFor="return-type">Return type <span>Required</span></label><select id="return-type" value={selectedReturnType} onChange={(event) => update('return_type', event.target.value)} required><option value="">Select return type</option>{returnTypes.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
           </div>
           <label htmlFor="assigned-preparer">Assigned preparer <span>Required</span></label>
           <input id="assigned-preparer" value={values.assigned_preparer} onChange={(event) => update('assigned_preparer', event.target.value)} required />
