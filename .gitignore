@@ -1,0 +1,11 @@
+node_modules/
+.pnpm-store/
+frontend/dist/
+backend/.venv/
+backend/instance/*.db
+backend/instance/*.db-shm
+backend/instance/*.db-wal
+__pycache__/
+*.py[cod]
+.env
+
