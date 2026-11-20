@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import Brand from './components/Brand.jsx'
 import ClientsPage from './features/clients/ClientsPage.jsx'
 import EngagementsPage from './features/engagements/EngagementsPage.jsx'
+import RequiredItemsPage from './features/required-items/RequiredItemsPage.jsx'
 import { api } from './services/api.js'
 
 function Login({ onLogin }) {
@@ -85,5 +86,7 @@ export default function App() {
   if (loading) return <main className="loading-screen"><span className="spinner" />Connecting to your workspace…</main>
   if (!user) return <Login onLogin={loadSession} />
   const pageProps = { user, onLogout: logout, onNavigate: setActiveModule }
-  return activeModule === 'engagements' ? <EngagementsPage {...pageProps} /> : <ClientsPage {...pageProps} />
+  if (activeModule === 'engagements') return <EngagementsPage {...pageProps} />
+  if (activeModule === 'requiredItems') return <RequiredItemsPage {...pageProps} />
+  return <ClientsPage {...pageProps} />
 }

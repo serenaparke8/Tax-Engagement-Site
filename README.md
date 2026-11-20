@@ -1,6 +1,6 @@
 # Tax Engagement Management System
 
-Milestones 1 through 3 provide the React/Vite frontend, Flask API, SQLite schema, demonstration accounts, login flow, client management, and tax engagement management. Required-item tracking, deadline views, dashboard, and reporting are reserved for later milestones.
+Milestones 1 through 4 provide the React/Vite frontend, Flask API, SQLite schema, demonstration accounts, login flow, client management, tax engagement management, and required-item tracking. Deadline views, dashboard, and reporting are reserved for later milestones.
 
 ## Requirements
 
@@ -60,6 +60,11 @@ SQLite creates `backend/instance/tax_engagement.db` when the Flask app starts. T
 - `POST /api/engagements` creates an engagement linked to an existing client with initial status `In Progress` (login required).
 - `PUT /api/engagements/<engagement_id>` updates tax year, return type, assigned preparer, engagement start date, and filing deadline (login required).
 - `PATCH /api/engagements/<engagement_id>/status` updates status using the three approved values (login required).
+- `GET /api/required-items?engagement_id=<id>` lists required items for one tax engagement (login required).
+- `POST /api/required-items` adds a required-item description to an existing engagement with status `Outstanding` (login required).
+- `DELETE /api/required-items/<required_item_id>` deletes one required-item record after the application confirms the request (login required).
+- `PATCH /api/required-items/<required_item_id>/status` updates a required-item status to `Outstanding` or `Received` (login required).
+- `GET /api/required-items/outstanding` lists outstanding items with their client and engagement information (login required).
 
 ## Run backend checks
 
@@ -71,4 +76,4 @@ python -m unittest discover -s tests -v
 
 From the `frontend` directory, run `npm run build` to create a production build.
 
-The authenticated application currently implements UC-1 through UC-6. UC-5 includes `filing_deadline`, clarifying the Program Specification 2.2 omission in accordance with UC-5 and the existing engagement design. Status changes remain separate under UC-6. Required-item/document tracking is not implemented yet.
+The authenticated application currently implements UC-1 through UC-8. UC-5 includes `filing_deadline`, clarifying the Program Specification 2.2 omission in accordance with UC-5 and the existing engagement design. Status changes remain separate under UC-6. UC-7 updates the status of existing required items; adding a required item is a supporting operation to populate the approved table, not an additional documented use case. UC-8 shows only outstanding items with their associated client and engagement information.
