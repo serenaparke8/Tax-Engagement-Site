@@ -10,6 +10,31 @@ const emptyDetails = {
   filing_deadline: '',
 }
 const statuses = ['In Progress', 'Waiting on Client', 'Completed']
+const returnTypes = [
+  'Individual (1040)',
+  'Partnership (1065)',
+  'S Corporation (1120-S)',
+  'C Corporation (1120)',
+  'Trust / Estate (1041)',
+  'Gift Tax (709)',
+  'Estate Tax (706)',
+  'Nonprofit (990)',
+  'Private Foundation (990-PF)',
+  'Foreign Corporation (1120-F)',
+]
+
+function buildTaxYearOptions(existingTaxYears) {
+  const currentYear = new Date().getFullYear()
+  const standardYears = []
+  for (let year = 2024; year <= Math.max(2024, currentYear + 5); year += 1) {
+    standardYears.push(String(year))
+  }
+  const historicalYears = [...new Set(existingTaxYears
+    .map(String)
+    .filter((year) => /^\d+$/.test(year) && Number(year) > 0 && Number(year) < 2024))]
+    .sort((first, second) => Number(second) - Number(first))
+  return [...standardYears, ...historicalYears]
+}
 
 function ClientSelection({ clients, selectedClient, onSelect, onChange }) {
   const [query, setQuery] = useState('')
@@ -42,8 +67,11 @@ function ClientSelection({ clients, selectedClient, onSelect, onChange }) {
   )
 }
 
-function EngagementEditor({ kind, engagement, clients, onCancel, onSave }) {
+function EngagementEditor({ kind, engagement, clients, taxYears, onCancel, onSave }) {
   const creating = kind === 'create'
+  const availableReturnTypes = engagement && !returnTypes.includes(engagement.return_type)
+    ? [engagement.return_type, ...returnTypes]
+    : returnTypes
   const [selectedClient, setSelectedClient] = useState(null)
   const [values, setValues] = useState(creating ? emptyDetails : {
     tax_year: String(engagement.tax_year),
@@ -99,8 +127,8 @@ function EngagementEditor({ kind, engagement, clients, onCancel, onSave }) {
 
         <form className="client-form engagement-form" onSubmit={submit}>
           <div className="form-row">
-            <div><label htmlFor="tax-year">Tax year <span>Required</span></label><input id="tax-year" type="number" min="1" step="1" value={values.tax_year} onChange={(event) => update('tax_year', event.target.value)} required /></div>
-            <div><label htmlFor="return-type">Return type <span>Required</span></label><input id="return-type" value={values.return_type} onChange={(event) => update('return_type', event.target.value)} required /></div>
+            <div><label htmlFor="tax-year">Tax year <span>Required</span></label><select id="tax-year" value={values.tax_year} onChange={(event) => update('tax_year', event.target.value)} required><option value="">Select tax year</option>{taxYears.map((year) => <option key={year} value={year}>{year}</option>)}</select></div>
+            <div><label htmlFor="return-type">Return type <span>Required</span></label><select id="return-type" value={values.return_type} onChange={(event) => update('return_type', event.target.value)} required><option value="">Select return type</option>{availableReturnTypes.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
           </div>
           <label htmlFor="assigned-preparer">Assigned preparer <span>Required</span></label>
           <input id="assigned-preparer" value={values.assigned_preparer} onChange={(event) => update('assigned_preparer', event.target.value)} required />
@@ -181,6 +209,7 @@ export default function EngagementsPage({ user, onLogout, onNavigate }) {
   const [editor, setEditor] = useState(null)
   const [selected, setSelected] = useState(null)
   const [statusEditing, setStatusEditing] = useState(null)
+  const taxYears = useMemo(() => buildTaxYearOptions(engagements.map((item) => item.tax_year)), [engagements])
 
   async function loadData() {
     const [clientResult, engagementResult] = await Promise.all([
@@ -253,7 +282,7 @@ export default function EngagementsPage({ user, onLogout, onNavigate }) {
         </section>
       </section>
 
-      {editor && <EngagementEditor kind={editor.kind} engagement={editor.engagement} clients={clients} onCancel={() => setEditor(null)} onSave={saveDetails} />}
+      {editor && <EngagementEditor kind={editor.kind} engagement={editor.engagement} clients={clients} taxYears={taxYears} onCancel={() => setEditor(null)} onSave={saveDetails} />}
       {selected && <EngagementDetails engagement={selected} onClose={() => setSelected(null)} onEdit={startEdit} onEditStatus={() => { setStatusEditing(selected); setSelected(null) }} />}
       {statusEditing && <StatusEditor engagement={statusEditing} onCancel={() => setStatusEditing(null)} onSave={saveStatus} />}
     </main>

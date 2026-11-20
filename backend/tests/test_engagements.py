@@ -59,6 +59,48 @@ class EngagementManagementTests(unittest.TestCase):
         self.assertEqual(len(listed), 1)
         self.assertEqual(listed[0]["engagement_id"], engagement["engagement_id"])
 
+    def test_return_type_options_and_tax_year_values_persist_on_create_and_update(self):
+        return_types = (
+            "Individual (1040)",
+            "Partnership (1065)",
+            "S Corporation (1120-S)",
+            "C Corporation (1120)",
+            "Trust / Estate (1041)",
+            "Gift Tax (709)",
+            "Estate Tax (706)",
+            "Nonprofit (990)",
+            "Private Foundation (990-PF)",
+            "Foreign Corporation (1120-F)",
+        )
+        created_ids = []
+        for index, return_type in enumerate(return_types):
+            with self.subTest(return_type=return_type):
+                year = str(2024 + index)
+                response = self.create_engagement(tax_year=year, return_type=return_type)
+                self.assertEqual(response.status_code, 201, response.get_json())
+                saved = response.get_json()["engagement"]
+                self.assertEqual(saved["tax_year"], int(year))
+                self.assertEqual(saved["return_type"], return_type)
+                created_ids.append(saved["engagement_id"])
+
+        target_id = created_ids[0]
+        updated = self.client.put(
+            f"/api/engagements/{target_id}",
+            json={
+                "tax_year": "2019",
+                "return_type": "Foreign Corporation (1120-F)",
+                "assigned_preparer": "Serena Parke",
+                "engagement_start_date": "2026-01-15",
+                "filing_deadline": "2026-04-15",
+            },
+        )
+        self.assertEqual(updated.status_code, 200, updated.get_json())
+        refreshed = self.client.get("/api/engagements").get_json()["engagements"]
+        persisted = next(item for item in refreshed if item["engagement_id"] == target_id)
+        self.assertEqual(persisted["tax_year"], 2019)
+        self.assertEqual(persisted["return_type"], "Foreign Corporation (1120-F)")
+        self.assertEqual(len(refreshed), len(return_types))
+
     def test_create_rejects_missing_invalid_fields_and_unknown_client(self):
         for overrides in (
             {"return_type": ""},
