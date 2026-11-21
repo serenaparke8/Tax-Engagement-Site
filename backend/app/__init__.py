@@ -6,6 +6,7 @@ from flask import Flask, jsonify
 from .auth import auth_bp
 from .clients import clients_bp
 from .db import init_db
+from .deadlines import deadlines_bp
 from .engagements import engagements_bp
 from .required_items import required_items_bp
 
@@ -29,6 +30,7 @@ def create_app(test_config=None):
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(clients_bp, url_prefix="/api/clients")
     app.register_blueprint(engagements_bp, url_prefix="/api/engagements")
+    app.register_blueprint(deadlines_bp, url_prefix="/api/deadlines")
     app.register_blueprint(required_items_bp, url_prefix="/api/required-items")
 
     @app.get("/api/health")

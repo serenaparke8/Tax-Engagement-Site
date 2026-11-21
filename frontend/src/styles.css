@@ -141,3 +141,25 @@ form button span { font-size: 20px; font-weight: 400; }
 @media (max-width: 680px) { .required-item-controls { padding-right: 17px; padding-left: 17px; }.required-item-engagement-summary { margin-right: 17px; margin-left: 17px; }.required-item-add-form { grid-template-columns: 1fr; margin-right: 17px; margin-left: 17px; }.required-item-add-form .required-item-custom-field { grid-column: 1 / -1; }.required-item-add-form .primary-button { grid-column: 1; grid-row: auto; width: 100%; }.required-items-list-heading { align-items: flex-start; flex-direction: column; padding-right: 17px; padding-left: 17px; } }
 @media (max-width: 780px) { .workspace-header { height: auto; min-height: 78px; flex-wrap: wrap; gap: 0 10px; padding: 13px 0 0; }.workspace-header > .brand-lockup { margin-right: auto; }.module-nav { order: 3; width: 100%; height: 44px; }.module-nav button { flex: 1; justify-content: center; }.module-nav button.active::after { right: 18px; left: 18px; }.account-area { margin-left: auto; }.engagements-content { margin-top: 34px; } }
 @media (max-width: 680px) { .engagement-search-wrap { margin-right: 15px; margin-left: 15px; }.engagement-detail-grid { grid-template-columns: 1fr; }.detail-actions { align-items: stretch; flex-direction: column-reverse; }.detail-actions button { width: 100%; }.engagement-editor { max-height: calc(100vh - 24px); }.client-picker-results { max-height: 120px; } }
+
+.upcoming-deadlines-table { min-width: 850px; }
+.upcoming-deadlines-table td { white-space: normal; }
+.deadline-days { display: inline-flex; min-height: 25px; align-items: center; padding: 0 9px; border-radius: 20px; color: #356b5b; background: #eaf5ef; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.deadline-days.soon { color: #91671d; background: #fff5df; }
+.deadlines-card .client-count { margin-left: auto; }
+@media (min-width: 1024px) {
+  .upcoming-deadlines-table { min-width: 0; table-layout: fixed; }
+  .upcoming-deadlines-table th, .upcoming-deadlines-table td { padding-right: 9px; padding-left: 9px; font-size: 11px; overflow-wrap: anywhere; }
+  .upcoming-deadlines-table th:first-child { padding-left: 15px; }
+  .client-table.upcoming-deadlines-table td:first-child { min-width: 0; padding-left: 15px; }
+  .client-table.upcoming-deadlines-table td:nth-child(4) { min-width: 0; }
+  .upcoming-deadlines-table th:nth-child(1), .upcoming-deadlines-table td:nth-child(1) { width: 18%; }
+  .upcoming-deadlines-table th:nth-child(2), .upcoming-deadlines-table td:nth-child(2) { width: 19%; }
+  .upcoming-deadlines-table th:nth-child(3), .upcoming-deadlines-table td:nth-child(3) { width: 9%; }
+  .upcoming-deadlines-table th:nth-child(4), .upcoming-deadlines-table td:nth-child(4) { width: 21%; }
+  .upcoming-deadlines-table th:nth-child(5), .upcoming-deadlines-table td:nth-child(5) { width: 18%; }
+  .upcoming-deadlines-table th:nth-child(6), .upcoming-deadlines-table td:nth-child(6) { width: 15%; }
+  .upcoming-deadlines-table td strong { font-size: 11px; }
+  .upcoming-deadlines-table td:nth-child(5) strong { white-space: nowrap; }
+}
+@media (max-width: 680px) { .deadlines-content .client-list-heading { align-items: flex-start; }.deadlines-card .client-count { margin-left: 0; } }

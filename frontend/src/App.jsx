@@ -3,6 +3,7 @@ import Brand from './components/Brand.jsx'
 import ClientsPage from './features/clients/ClientsPage.jsx'
 import EngagementsPage from './features/engagements/EngagementsPage.jsx'
 import RequiredItemsPage from './features/required-items/RequiredItemsPage.jsx'
+import UpcomingDeadlinesPage from './features/deadlines/UpcomingDeadlinesPage.jsx'
 import { api } from './services/api.js'
 
 function Login({ onLogin }) {
@@ -88,5 +89,6 @@ export default function App() {
   const pageProps = { user, onLogout: logout, onNavigate: setActiveModule }
   if (activeModule === 'engagements') return <EngagementsPage {...pageProps} />
   if (activeModule === 'requiredItems') return <RequiredItemsPage {...pageProps} />
+  if (activeModule === 'deadlines') return <UpcomingDeadlinesPage {...pageProps} />
   return <ClientsPage {...pageProps} />
 }

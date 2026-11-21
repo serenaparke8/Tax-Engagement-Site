@@ -1,6 +1,6 @@
 # Tax Engagement Management System
 
-Milestones 1 through 4 provide the React/Vite frontend, Flask API, SQLite schema, demonstration accounts, login flow, client management, tax engagement management, and required-item tracking. Deadline views, dashboard, and reporting are reserved for later milestones.
+Milestones 1 through 5 provide the React/Vite frontend, Flask API, SQLite schema, demonstration accounts, login flow, client management, tax engagement management, required-item tracking, and the UC-9 upcoming-deadlines view.
 
 ## Requirements
 
@@ -65,6 +65,7 @@ SQLite creates `backend/instance/tax_engagement.db` when the Flask app starts. T
 - `DELETE /api/required-items/<required_item_id>` deletes one required-item record after the application confirms the request (login required).
 - `PATCH /api/required-items/<required_item_id>/status` updates a required-item status to `Outstanding` or `Received` (login required).
 - `GET /api/required-items/outstanding` lists outstanding items with their client and engagement information (login required).
+- `GET /api/deadlines/upcoming` lists filing deadlines from today through the next 14 calendar days, inclusive, with client, engagement, tax-year, return-type, and days-remaining information (login required).
 
 ## Run backend checks
 
@@ -76,4 +77,4 @@ python -m unittest discover -s tests -v
 
 From the `frontend` directory, run `npm run build` to create a production build.
 
-The authenticated application currently implements UC-1 through UC-8. UC-5 includes `filing_deadline`, clarifying the Program Specification 2.2 omission in accordance with UC-5 and the existing engagement design. Status changes remain separate under UC-6. UC-7 updates the status of existing required items; adding a required item is a supporting operation to populate the approved table, not an additional documented use case. UC-8 shows only outstanding items with their associated client and engagement information.
+The authenticated application currently implements UC-1 through UC-9. UC-5 includes `filing_deadline`, clarifying the Program Specification 2.2 omission in accordance with UC-5 and the existing engagement design. Status changes remain separate under UC-6. UC-7 updates the status of existing required items; adding a required item is a supporting operation to populate the approved table, not an additional documented use case. UC-8 shows only outstanding items with their associated client and engagement information. UC-9 uses a dynamic inclusive window from today through the date 14 calendar days later.
