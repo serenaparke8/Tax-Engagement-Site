@@ -2,21 +2,17 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app import create_app
-from app.auth.routes import DEMO_ACCOUNTS
 from app.db import get_db
+from test_support import create_test_app, login_with_csrf, TEST_DEMO_ACCOUNTS
 
 
 class RequiredItemTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         database = str(Path(self.temp_dir.name) / "test_required_items.db")
-        self.app = create_app({"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": database})
+        self.app = create_test_app(database)
         self.client = self.app.test_client()
-        response = self.client.post(
-            "/api/auth/login",
-            json={"username": DEMO_ACCOUNTS[0][0], "password": DEMO_ACCOUNTS[0][1]},
-        )
+        response = login_with_csrf(self.client, *TEST_DEMO_ACCOUNTS[0][:2])
         self.assertEqual(response.status_code, 200, response.get_json())
 
         client_response = self.client.post(

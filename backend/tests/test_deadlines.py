@@ -4,8 +4,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
-from app import create_app
-from app.auth.routes import DEMO_ACCOUNTS
+from test_support import create_test_app, login_with_csrf, TEST_DEMO_ACCOUNTS
 
 
 class UpcomingDeadlinesTests(unittest.TestCase):
@@ -14,12 +13,9 @@ class UpcomingDeadlinesTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         database = str(Path(self.temp_dir.name) / "test_tax_engagement.db")
-        self.app = create_app({"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": database})
+        self.app = create_test_app(database)
         self.client = self.app.test_client()
-        response = self.client.post(
-            "/api/auth/login",
-            json={"username": DEMO_ACCOUNTS[0][0], "password": DEMO_ACCOUNTS[0][1]},
-        )
+        response = login_with_csrf(self.client, *TEST_DEMO_ACCOUNTS[0][:2])
         self.assertEqual(response.status_code, 200, response.get_json())
 
     def tearDown(self):

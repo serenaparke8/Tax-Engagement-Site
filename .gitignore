@@ -8,4 +8,6 @@ backend/instance/*.db-wal
 __pycache__/
 *.py[cod]
 .env
+.env.*
+!.env.example
 

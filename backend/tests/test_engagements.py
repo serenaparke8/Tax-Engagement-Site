@@ -2,20 +2,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app import create_app
-from app.auth.routes import DEMO_ACCOUNTS
+from test_support import create_test_app, login_with_csrf, TEST_DEMO_ACCOUNTS
 
 
 class EngagementManagementTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         database = str(Path(self.temp_dir.name) / "test_tax_engagement.db")
-        self.app = create_app({"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": database})
+        self.app = create_test_app(database)
         self.client = self.app.test_client()
-        response = self.client.post(
-            "/api/auth/login",
-            json={"username": DEMO_ACCOUNTS[0][0], "password": DEMO_ACCOUNTS[0][1]},
-        )
+        response = login_with_csrf(self.client, *TEST_DEMO_ACCOUNTS[0][:2])
         self.assertEqual(response.status_code, 200, response.get_json())
         response = self.client.post(
             "/api/clients",
@@ -200,11 +196,9 @@ class EngagementManagementTests(unittest.TestCase):
         )
 
     def test_both_demo_accounts_can_sign_in_and_out(self):
-        for username, password, _display_name in DEMO_ACCOUNTS:
+        for username, password, _display_name in TEST_DEMO_ACCOUNTS:
             with self.subTest(username=username):
-                response = self.client.post(
-                    "/api/auth/login", json={"username": username, "password": password}
-                )
+                response = login_with_csrf(self.client, username, password)
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(self.client.get("/api/auth/me").get_json()["user"]["username"], username)
                 self.assertEqual(self.client.post("/api/auth/logout").status_code, 200)

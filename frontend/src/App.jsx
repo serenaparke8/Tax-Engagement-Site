@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import Brand from './components/Brand.jsx'
 import ClientsPage from './features/clients/ClientsPage.jsx'
+import DashboardPage from './features/dashboard/DashboardPage.jsx'
 import EngagementsPage from './features/engagements/EngagementsPage.jsx'
 import RequiredItemsPage from './features/required-items/RequiredItemsPage.jsx'
 import UpcomingDeadlinesPage from './features/deadlines/UpcomingDeadlinesPage.jsx'
+import EngagementReportsPage from './features/reports/EngagementReportsPage.jsx'
 import { api } from './services/api.js'
 
 function Login({ onLogin }) {
@@ -67,10 +69,11 @@ function Login({ onLogin }) {
 
 export default function App() {
   const [user, setUser] = useState(null)
-  const [activeModule, setActiveModule] = useState('clients')
+  const [activeModule, setActiveModule] = useState('dashboard')
   const [loading, setLoading] = useState(true)
 
   async function loadSession() {
+    await api('/api/auth/csrf')
     const result = await api('/api/auth/me')
     setUser(result.user)
   }
@@ -87,8 +90,10 @@ export default function App() {
   if (loading) return <main className="loading-screen"><span className="spinner" />Connecting to your workspace…</main>
   if (!user) return <Login onLogin={loadSession} />
   const pageProps = { user, onLogout: logout, onNavigate: setActiveModule }
+  if (activeModule === 'dashboard') return <DashboardPage {...pageProps} />
   if (activeModule === 'engagements') return <EngagementsPage {...pageProps} />
   if (activeModule === 'requiredItems') return <RequiredItemsPage {...pageProps} />
   if (activeModule === 'deadlines') return <UpcomingDeadlinesPage {...pageProps} />
+  if (activeModule === 'reports') return <EngagementReportsPage {...pageProps} />
   return <ClientsPage {...pageProps} />
 }
