@@ -7,7 +7,7 @@ from flask import Flask, jsonify, request, session
 
 from .auth import auth_bp
 from .clients import clients_bp
-from .db import init_db
+from .db import configure_database, init_db
 from .dashboard import dashboard_bp
 from .deadlines import deadlines_bp
 from .engagements import engagements_bp
@@ -62,14 +62,15 @@ def create_app(test_config=None):
     load_local_environment()
     environment = os.environ.get("TEM_ENV", "development").strip().lower()
     configured_secret = os.environ.get("TEM_SECRET_KEY", "").strip()
-    if environment == "production" and not valid_production_secret(configured_secret):
-        raise RuntimeError("TEM_SECRET_KEY must be a unique secret of at least 32 characters when TEM_ENV=production.")
 
     app = Flask(__name__)
     app.config.from_mapping(
         SECRET_KEY=configured_secret or secrets.token_urlsafe(48),
         TEM_ENV=environment,
-        DEMO_ACCOUNTS=configured_demo_accounts(),
+        # Read seed credentials only in local development. Production users are
+        # provisioned explicitly and never loaded from request configuration.
+        DEMO_ACCOUNTS=(configured_demo_accounts() if environment != "production" else ()),
+        TEM_DATABASE_URL=os.environ.get("TEM_DATABASE_URL"),
         DATABASE=os.environ.get(
             "TEM_DATABASE",
             str(Path(__file__).resolve().parents[1] / "instance" / "tax_engagement.db"),
@@ -82,10 +83,15 @@ def create_app(test_config=None):
     if test_config:
         app.config.update(test_config)
 
+    app.config["TEM_ENV"] = str(app.config.get("TEM_ENV", "development")).strip().lower()
     if app.config.get("TEM_ENV") == "production":
         secret_key = app.config.get("SECRET_KEY")
         if not valid_production_secret(secret_key):
             raise RuntimeError("A unique Flask SECRET_KEY of at least 32 characters is required in production.")
+        if not app.config.get("TEM_DATABASE_URL"):
+            raise RuntimeError(
+                "TEM_DATABASE_URL is required when TEM_ENV=production; production cannot use SQLite."
+            )
     if app.config.get("TEM_ENV") == "production":
         app.config["SESSION_COOKIE_SECURE"] = True
 
@@ -102,8 +108,11 @@ def create_app(test_config=None):
             return jsonify(error="The request could not be verified. Refresh the page and try again."), 403
         return None
 
-    Path(app.config["DATABASE"]).parent.mkdir(parents=True, exist_ok=True)
-    init_db(app)
+    postgresql_url = app.config.pop("TEM_DATABASE_URL", None)
+    configure_database(app, postgresql_url=postgresql_url)
+    if app.config["DATABASE_BACKEND"] == "sqlite":
+        Path(app.config["DATABASE"]).parent.mkdir(parents=True, exist_ok=True)
+        init_db(app)
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(clients_bp, url_prefix="/api/clients")
     app.register_blueprint(dashboard_bp, url_prefix="/api/dashboard")

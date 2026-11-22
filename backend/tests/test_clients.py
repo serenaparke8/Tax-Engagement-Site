@@ -1,7 +1,7 @@
-import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from sqlalchemy import text
 
 from app.db import get_db
 from test_support import create_test_app, login_with_csrf, TEST_DEMO_ACCOUNTS
@@ -89,12 +89,12 @@ class ClientManagementTests(unittest.TestCase):
         client_id = self.add_client().get_json()["client"]["client_id"]
         with self.app.app_context():
             db = get_db()
-            db.execute(
+            db.execute(text(
                 """INSERT INTO TAX_ENGAGEMENT
                    (client_id, tax_year, return_type, assigned_preparer,
                     engagement_start_date, filing_deadline)
-                   VALUES (?, 2026, 'Individual', 'Serena Parke', '2026-01-01', '2026-04-15')""",
-                (client_id,),
+                   VALUES (:client_id, 2026, 'Individual', 'Serena Parke', '2026-01-01', '2026-04-15')"""),
+                {"client_id": client_id},
             )
             db.commit()
 
@@ -102,8 +102,8 @@ class ClientManagementTests(unittest.TestCase):
         self.assertEqual(response.status_code, 409)
         self.assertIn("associated tax engagements exist", response.get_json()["error"])
         with self.app.app_context():
-            self.assertIsNotNone(get_db().execute("SELECT 1 FROM CLIENT WHERE client_id = ?", (client_id,)).fetchone())
-            self.assertEqual(get_db().execute("SELECT COUNT(*) FROM TAX_ENGAGEMENT WHERE client_id = ?", (client_id,)).fetchone()[0], 1)
+            self.assertIsNotNone(get_db().execute(text("SELECT 1 FROM CLIENT WHERE client_id = :client_id"), {"client_id": client_id}).first())
+            self.assertEqual(get_db().execute(text("SELECT COUNT(*) FROM TAX_ENGAGEMENT WHERE client_id = :client_id"), {"client_id": client_id}).scalar_one(), 1)
 
     def test_both_demo_accounts_can_sign_in_and_out(self):
         for username, password, _display_name in TEST_DEMO_ACCOUNTS:
@@ -112,6 +112,12 @@ class ClientManagementTests(unittest.TestCase):
                 self.assertEqual(self.client.get("/api/auth/me").get_json()["user"]["username"], username)
                 self.assertEqual(self.client.post("/api/auth/logout").status_code, 200)
                 self.assertIsNone(self.client.get("/api/auth/me").get_json()["user"])
+
+    def test_login_username_lookup_remains_case_insensitive(self):
+        username, password, _display_name = TEST_DEMO_ACCOUNTS[0]
+        response = login_with_csrf(self.client, username.upper(), password)
+        self.assertEqual(response.status_code, 200, response.get_json())
+        self.assertEqual(self.client.get("/api/auth/me").get_json()["user"]["username"], username)
 
 
 if __name__ == "__main__":

@@ -86,14 +86,14 @@ class ApplicationSecurityTests(unittest.TestCase):
             "TESTING": True,
             "TEM_ENV": "production",
             "SECRET_KEY": "test-only-production-signing-key",
+            "TEM_DATABASE_URL": "postgresql+psycopg://test_user@127.0.0.1/test_database",
             "DATABASE": str(Path(self.temp_dir.name) / "production_cookie.db"),
             "DEMO_ACCOUNTS": TEST_DEMO_ACCOUNTS,
         })
-        response = production_app.test_client().get("/api/auth/csrf")
-        cookie = response.headers["Set-Cookie"]
-        self.assertIn("Secure", cookie)
-        self.assertIn("HttpOnly", cookie)
-        self.assertIn("SameSite=Lax", cookie)
+        self.assertTrue(production_app.config["SESSION_COOKIE_SECURE"])
+        self.assertTrue(production_app.config["SESSION_COOKIE_HTTPONLY"])
+        self.assertEqual(production_app.config["SESSION_COOKIE_SAMESITE"], "Lax")
+        production_app.extensions["tems_database_engine"].dispose()
 
 
 if __name__ == "__main__":

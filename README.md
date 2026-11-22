@@ -37,13 +37,33 @@ Open <http://localhost:5173>. Vite forwards `/api` requests to Flask at `http://
 
 ## Demonstration login
 
-The local demonstration accounts are configured through the `TEM_DEMO_*` variables in `backend/.env`. Passwords are not listed in this README or the example environment file. For a fresh setup, choose private usernames and passwords in `backend/.env` before starting Flask. Earlier Git history contains the original demo credentials, so do not use those historical values for a shared or deployed instance. Demo accounts are seeded on the first API request when the `USERS` table is empty, using Werkzeug password hashes. Both accounts share the same business records and access level. Do not use real client or taxpayer data.
+The local demonstration accounts are configured through the `TEM_DEMO_ACCOUNT_*` variables in `backend/.env`. Passwords are not listed in this README or the example environment file. For a fresh local setup, choose private usernames and passwords in `backend/.env`; during local SQLite development only, the accounts are seeded on the first API request if the `USERS` table is empty. Production requests never seed accounts. Both demonstration accounts share the same business records and access level. Do not use real client or taxpayer data.
 
 For an HTTPS deployment, set `TEM_ENV=production` and provide a unique `TEM_SECRET_KEY` of at least 32 characters. The app rejects missing, short, and example placeholder keys in production and marks session cookies `Secure`.
 
+## Vercel deployment configuration
+
+The repository-root `vercel.json` defines one Vercel project with two Services: the Vite frontend rooted at `frontend/` and the Flask backend rooted at `backend/`. The backend entrypoint is `run:app`. Requests under `/api/` route to Flask; all other paths route to the frontend. The frontend already calls same-origin relative `/api/...` URLs, so it needs no production API host setting. The backend Python version is pinned to 3.12 in `backend/.python-version`.
+
+In Vercel, import the repository as one project and set its framework preset to **Services**. Keep the repository root as the project root so Vercel can read the top-level `vercel.json` and build each service from its configured root. The frontend build uses the existing Vite package configuration and lockfile; the backend installs from `backend/requirements.txt` and exports the Flask `app` through `backend/run.py`.
+
+Configure these variables in the Vercel project’s private Environment Variables settings for Production (and separately for Preview if previews need a database):
+
+- `TEM_ENV` — set to `production`.
+- `TEM_SECRET_KEY` — a unique random signing key of at least 32 characters; do not reuse the local key.
+- `TEM_DATABASE_URL` — the private PostgreSQL connection URL for the hosted database.
+
+Do not put real values in `vercel.json`, README files, or `.env.example`. Create the PostgreSQL schema and provision the demo accounts as separate, deliberate setup steps before asking the professor to sign in. Services are currently documented by Vercel as Beta; confirm access is enabled for the Vercel account and review current service and function usage limits before deployment. This repository change configures the project but does not create a Vercel project, database, schema, accounts, or deployment.
+
 ## Database
 
-SQLite uses `backend/instance/tax_engagement.db`. The schema contains `USERS`, `CLIENT`, `TAX_ENGAGEMENT`, and `REQUIRED_ITEM`, with foreign-key enforcement enabled. `CLIENT.client_name` is required; contact name, email, and phone may be blank. Tax-engagement status is restricted to `In Progress`, `Waiting on Client`, or `Completed` and defaults to `In Progress`. Required-item status is restricted to `Outstanding` or `Received` and defaults to `Outstanding`. Client deletion is restricted when engagements reference that client.
+Local development continues to use SQLite at `backend/instance/tax_engagement.db` by default. Set `TEM_DATABASE` to choose a different local SQLite file. SQLite foreign-key enforcement remains enabled. The schema contains `USERS`, `CLIENT`, `TAX_ENGAGEMENT`, and `REQUIRED_ITEM`; `CLIENT.client_name` is required, engagement status is restricted to `In Progress`, `Waiting on Client`, or `Completed`, and required-item status is restricted to `Outstanding` or `Received`.
+
+The database foundation now includes SQLAlchemy Core, Psycopg 3, and Alembic. Production configuration uses `TEM_ENV=production` and requires `TEM_DATABASE_URL` to point to PostgreSQL; the app will fail at startup if that URL is missing and will not fall back to SQLite. `TEM_SECRET_KEY` must also be set to a unique value of at least 32 characters. Keep connection URLs and secrets in private environment settings, never in source control.
+
+The initial Alembic migration describes the four-table schema for a new PostgreSQL database. It must be applied explicitly to a PostgreSQL database before the application starts there; local SQLite databases continue to use the existing initialization path. Backend routes now use SQLAlchemy Core statements intended to run on both databases. PostgreSQL behavior still requires verification against an actual PostgreSQL server before production use.
+
+For a new production PostgreSQL database, configure `TEM_ENV=production`, `TEM_DATABASE_URL`, and `TEM_SECRET_KEY` privately, then apply the Alembic migration from the project root with `python -m alembic upgrade head`. Provision the two demo accounts once from the backend directory with `python provision_demo_accounts.py`. The command asks for usernames and display names, then collects each new password through hidden terminal prompts and asks for confirmation. It refuses to run unless production PostgreSQL is configured and the `USERS` table is empty. It inserts both accounts in one transaction using the same Werkzeug password hashing used by login. Do not put production demo passwords in environment variables or source files. The provisioning command does not create the database schema; apply the Alembic migration first.
 
 ## Foundation API
 

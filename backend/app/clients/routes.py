@@ -1,6 +1,6 @@
-import sqlite3
-
 from flask import jsonify, request, session
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from ..db import get_db
 from . import clients_bp
@@ -45,10 +45,10 @@ def serialize_client(row):
 
 @clients_bp.get("")
 def list_clients():
-    rows = get_db().execute(
+    rows = get_db().execute(text(
         """SELECT client_id, client_name, contact_name, email, phone
-           FROM CLIENT ORDER BY client_name COLLATE NOCASE, client_id"""
-    ).fetchall()
+           FROM CLIENT ORDER BY LOWER(client_name), client_id"""
+    )).mappings().all()
     return jsonify(clients=[serialize_client(row) for row in rows])
 
 
@@ -59,17 +59,19 @@ def add_client():
         return jsonify(error=error), 400
 
     db = get_db()
-    cursor = db.execute(
+    result = db.execute(text(
         """INSERT INTO CLIENT (client_name, contact_name, email, phone)
-           VALUES (:client_name, :contact_name, :email, :phone)""",
+           VALUES (:client_name, :contact_name, :email, :phone)
+           RETURNING client_id"""),
         values,
     )
+    client_id = result.scalar_one()
     db.commit()
-    row = db.execute(
+    row = db.execute(text(
         """SELECT client_id, client_name, contact_name, email, phone
-           FROM CLIENT WHERE client_id = ?""",
-        (cursor.lastrowid,),
-    ).fetchone()
+           FROM CLIENT WHERE client_id = :client_id"""),
+        {"client_id": client_id},
+    ).mappings().first()
     return jsonify(client=serialize_client(row), message="Client added successfully."), 201
 
 
@@ -80,51 +82,45 @@ def update_client(client_id):
         return jsonify(error=error), 400
 
     db = get_db()
-    existing = db.execute(
-        "SELECT client_id FROM CLIENT WHERE client_id = ?", (client_id,)
-    ).fetchone()
+    existing = db.execute(text("SELECT client_id FROM CLIENT WHERE client_id = :client_id"), {"client_id": client_id}).first()
     if existing is None:
         return jsonify(error="Client record not found."), 404
 
-    db.execute(
+    db.execute(text(
         """UPDATE CLIENT
            SET client_name = :client_name,
                contact_name = :contact_name,
                email = :email,
                phone = :phone
-           WHERE client_id = :client_id""",
+           WHERE client_id = :client_id"""),
         {**values, "client_id": client_id},
     )
     db.commit()
-    row = db.execute(
+    row = db.execute(text(
         """SELECT client_id, client_name, contact_name, email, phone
-           FROM CLIENT WHERE client_id = ?""",
-        (client_id,),
-    ).fetchone()
+           FROM CLIENT WHERE client_id = :client_id"""),
+        {"client_id": client_id},
+    ).mappings().first()
     return jsonify(client=serialize_client(row), message="Client updated successfully.")
 
 
 @clients_bp.delete("/<int:client_id>")
 def delete_client(client_id):
     db = get_db()
-    existing = db.execute(
-        "SELECT client_id FROM CLIENT WHERE client_id = ?", (client_id,)
-    ).fetchone()
+    existing = db.execute(text("SELECT client_id FROM CLIENT WHERE client_id = :client_id"), {"client_id": client_id}).first()
     if existing is None:
         return jsonify(error="Client record not found."), 404
 
-    engagement = db.execute(
-        "SELECT 1 FROM TAX_ENGAGEMENT WHERE client_id = ? LIMIT 1", (client_id,)
-    ).fetchone()
+    engagement = db.execute(text("SELECT 1 FROM TAX_ENGAGEMENT WHERE client_id = :client_id LIMIT 1"), {"client_id": client_id}).first()
     if engagement is not None:
         return jsonify(
             error="This client cannot be deleted because associated tax engagements exist."
         ), 409
 
     try:
-        db.execute("DELETE FROM CLIENT WHERE client_id = ?", (client_id,))
+        db.execute(text("DELETE FROM CLIENT WHERE client_id = :client_id"), {"client_id": client_id})
         db.commit()
-    except sqlite3.IntegrityError:
+    except IntegrityError:
         db.rollback()
         return jsonify(
             error="This client cannot be deleted because associated tax engagements exist."

@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 
 from flask import jsonify, session
+from sqlalchemy import text
 
 from ..db import get_db
 from . import deadlines_bp
@@ -24,15 +25,15 @@ def upcoming_deadline_rows(today=None):
     """Return filing deadlines from today through the inclusive 14-day window."""
     window_start = today or current_date()
     window_end = window_start + timedelta(days=UPCOMING_WINDOW_DAYS)
-    rows = get_db().execute(
+    rows = get_db().execute(text(
         """SELECT e.engagement_id, e.client_id, c.client_name, e.tax_year,
                   e.return_type, e.filing_deadline
            FROM TAX_ENGAGEMENT AS e
            JOIN CLIENT AS c ON c.client_id = e.client_id
-           WHERE e.filing_deadline >= ? AND e.filing_deadline <= ?
-           ORDER BY e.filing_deadline ASC, e.engagement_id ASC""",
-        (window_start.isoformat(), window_end.isoformat()),
-    ).fetchall()
+           WHERE e.filing_deadline >= :window_start AND e.filing_deadline <= :window_end
+           ORDER BY e.filing_deadline ASC, e.engagement_id ASC"""),
+        {"window_start": window_start.isoformat(), "window_end": window_end.isoformat()},
+    ).mappings().all()
 
     deadlines = []
     for row in rows:

@@ -1,7 +1,8 @@
-import sqlite3
 from datetime import date
 
 from flask import jsonify, request, session
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from ..db import get_db
 from . import engagements_bp
@@ -93,20 +94,19 @@ def list_engagements():
     db = get_db()
     if search:
         pattern = f"%{search}%"
-        rows = db.execute(
+        rows = db.execute(text(
             engagement_select_sql(
-                """WHERE c.client_name LIKE ? COLLATE NOCASE
-                   OR CAST(e.tax_year AS TEXT) LIKE ?
-                   OR e.return_type LIKE ? COLLATE NOCASE
-                   OR e.assigned_preparer LIKE ? COLLATE NOCASE
-                   OR e.engagement_status LIKE ? COLLATE NOCASE"""
+                """WHERE LOWER(c.client_name) LIKE LOWER(:p1)
+                   OR CAST(e.tax_year AS TEXT) LIKE :p2
+                   OR LOWER(e.return_type) LIKE LOWER(:p3)
+                   OR LOWER(e.assigned_preparer) LIKE LOWER(:p4)
+                   OR LOWER(e.engagement_status) LIKE LOWER(:p5)"""
             ) + " ORDER BY e.filing_deadline, e.engagement_id DESC",
-            (pattern, pattern, pattern, pattern, pattern),
-        ).fetchall()
+        ), {f"p{i}": pattern for i in range(1, 6)}).mappings().all()
     else:
-        rows = db.execute(
+        rows = db.execute(text(
             engagement_select_sql() + " ORDER BY e.filing_deadline, e.engagement_id DESC"
-        ).fetchall()
+        )).mappings().all()
     return jsonify(engagements=[serialize_engagement(row) for row in rows])
 
 
@@ -130,27 +130,26 @@ def create_engagement():
         return jsonify(error=error), 400
 
     db = get_db()
-    client = db.execute("SELECT client_id FROM CLIENT WHERE client_id = ?", (client_id,)).fetchone()
+    client = db.execute(text("SELECT client_id FROM CLIENT WHERE client_id = :client_id"), {"client_id": client_id}).first()
     if client is None:
         return jsonify(error="The selected client does not exist."), 404
 
     try:
-        cursor = db.execute(
+        engagement_id = db.execute(text(
             """INSERT INTO TAX_ENGAGEMENT
                (client_id, tax_year, return_type, assigned_preparer,
                 engagement_start_date, filing_deadline)
                VALUES (:client_id, :tax_year, :return_type, :assigned_preparer,
-                       :engagement_start_date, :filing_deadline)""",
+                       :engagement_start_date, :filing_deadline)
+               RETURNING engagement_id"""),
             {**values, "client_id": client_id},
-        )
+        ).scalar_one()
         db.commit()
-    except sqlite3.IntegrityError:
+    except IntegrityError:
         db.rollback()
         return jsonify(error="The engagement could not be saved. Confirm the selected client and submitted information."), 400
 
-    row = db.execute(
-        engagement_select_sql("WHERE e.engagement_id = ?"), (cursor.lastrowid,)
-    ).fetchone()
+    row = db.execute(text(engagement_select_sql("WHERE e.engagement_id = :engagement_id")), {"engagement_id": engagement_id}).mappings().first()
     return jsonify(
         engagement=serialize_engagement(row),
         message="Tax engagement created successfully.",
@@ -164,22 +163,16 @@ def update_engagement_details(engagement_id):
         return jsonify(error=error), 400
 
     db = get_db()
-    existing = db.execute(
-        "SELECT engagement_id FROM TAX_ENGAGEMENT WHERE engagement_id = ?",
-        (engagement_id,),
-    ).fetchone()
+    existing = db.execute(text("SELECT engagement_id FROM TAX_ENGAGEMENT WHERE engagement_id = :engagement_id"), {"engagement_id": engagement_id}).first()
     if existing is None:
         return jsonify(error="Tax engagement not found."), 404
 
     assignments = ", ".join(f"{field} = :{field}" for field in DETAIL_FIELDS)
-    db.execute(
+    db.execute(text(
         f"UPDATE TAX_ENGAGEMENT SET {assignments} WHERE engagement_id = :engagement_id",
-        {**values, "engagement_id": engagement_id},
-    )
+    ), {**values, "engagement_id": engagement_id})
     db.commit()
-    row = db.execute(
-        engagement_select_sql("WHERE e.engagement_id = ?"), (engagement_id,)
-    ).fetchone()
+    row = db.execute(text(engagement_select_sql("WHERE e.engagement_id = :engagement_id")), {"engagement_id": engagement_id}).mappings().first()
     return jsonify(
         engagement=serialize_engagement(row),
         message="Tax engagement information updated successfully.",
@@ -196,26 +189,18 @@ def update_engagement_status(engagement_id):
         return jsonify(error="Select one of the approved engagement statuses."), 400
 
     db = get_db()
-    existing = db.execute(
-        "SELECT engagement_id FROM TAX_ENGAGEMENT WHERE engagement_id = ?",
-        (engagement_id,),
-    ).fetchone()
+    existing = db.execute(text("SELECT engagement_id FROM TAX_ENGAGEMENT WHERE engagement_id = :engagement_id"), {"engagement_id": engagement_id}).first()
     if existing is None:
         return jsonify(error="Tax engagement not found."), 404
 
     try:
-        db.execute(
-            "UPDATE TAX_ENGAGEMENT SET engagement_status = ? WHERE engagement_id = ?",
-            (status, engagement_id),
-        )
+        db.execute(text("UPDATE TAX_ENGAGEMENT SET engagement_status = :status WHERE engagement_id = :engagement_id"), {"status": status, "engagement_id": engagement_id})
         db.commit()
-    except sqlite3.IntegrityError:
+    except IntegrityError:
         db.rollback()
         return jsonify(error="The engagement status could not be updated; the previous status was kept."), 400
 
-    row = db.execute(
-        engagement_select_sql("WHERE e.engagement_id = ?"), (engagement_id,)
-    ).fetchone()
+    row = db.execute(text(engagement_select_sql("WHERE e.engagement_id = :engagement_id")), {"engagement_id": engagement_id}).mappings().first()
     return jsonify(
         engagement=serialize_engagement(row),
         message="Tax engagement status updated successfully.",

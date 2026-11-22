@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from sqlalchemy import text
 
 from app.db import get_db
 from test_support import create_test_app, login_with_csrf, TEST_DEMO_ACCOUNTS
@@ -82,11 +83,11 @@ class RequiredItemTests(unittest.TestCase):
         self.assertEqual(item["item_status"], "Outstanding")
 
         with self.app.app_context():
-            saved = get_db().execute(
+            saved = get_db().execute(text(
                 "SELECT engagement_id, required_item_description, item_status "
-                "FROM REQUIRED_ITEM WHERE required_item_id = ?",
-                (item["required_item_id"],),
-            ).fetchone()
+                "FROM REQUIRED_ITEM WHERE required_item_id = :required_item_id"),
+                {"required_item_id": item["required_item_id"]},
+            ).first()
         self.assertEqual(tuple(saved), (self.engagement_id, "Prior-year tax return", "Outstanding"))
 
     def test_add_required_item_requires_description_and_existing_engagement(self):
@@ -204,10 +205,10 @@ class RequiredItemTests(unittest.TestCase):
         self.assertEqual(rows[0]["return_type"], "Individual (1040)")
 
         with self.app.app_context():
-            saved_status = get_db().execute(
-                "SELECT item_status FROM REQUIRED_ITEM WHERE required_item_id = ?",
-                (received_item["required_item_id"],),
-            ).fetchone()["item_status"]
+            saved_status = get_db().execute(text(
+                "SELECT item_status FROM REQUIRED_ITEM WHERE required_item_id = :required_item_id"),
+                {"required_item_id": received_item["required_item_id"]},
+            ).mappings().first()["item_status"]
         self.assertEqual(saved_status, "Received")
 
     def test_invalid_status_keeps_existing_status(self):
@@ -248,10 +249,10 @@ class RequiredItemTests(unittest.TestCase):
 
         with self.app.app_context():
             db = get_db()
-            self.assertEqual(db.execute("SELECT COUNT(*) FROM CLIENT WHERE client_id = ?", (self.client_id,)).fetchone()[0], 1)
-            self.assertEqual(db.execute("SELECT COUNT(*) FROM TAX_ENGAGEMENT WHERE engagement_id = ?", (self.engagement_id,)).fetchone()[0], 1)
-            self.assertEqual(db.execute("SELECT COUNT(*) FROM REQUIRED_ITEM WHERE required_item_id = ?", (deleted_item["required_item_id"],)).fetchone()[0], 0)
-            self.assertEqual(db.execute("SELECT COUNT(*) FROM REQUIRED_ITEM WHERE required_item_id = ?", (retained_item["required_item_id"],)).fetchone()[0], 1)
+            self.assertEqual(db.execute(text("SELECT COUNT(*) FROM CLIENT WHERE client_id = :client_id"), {"client_id": self.client_id}).scalar_one(), 1)
+            self.assertEqual(db.execute(text("SELECT COUNT(*) FROM TAX_ENGAGEMENT WHERE engagement_id = :engagement_id"), {"engagement_id": self.engagement_id}).scalar_one(), 1)
+            self.assertEqual(db.execute(text("SELECT COUNT(*) FROM REQUIRED_ITEM WHERE required_item_id = :required_item_id"), {"required_item_id": deleted_item["required_item_id"]}).scalar_one(), 0)
+            self.assertEqual(db.execute(text("SELECT COUNT(*) FROM REQUIRED_ITEM WHERE required_item_id = :required_item_id"), {"required_item_id": retained_item["required_item_id"]}).scalar_one(), 1)
 
         missing = self.client.delete(f"/api/required-items/{deleted_item['required_item_id']}")
         self.assertEqual(missing.status_code, 404)

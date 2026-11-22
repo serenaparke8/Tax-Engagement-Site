@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 
 from flask import jsonify, session
+from sqlalchemy import text
 
 from ..db import get_db
 from . import dashboard_bp
@@ -24,7 +25,7 @@ def require_authenticated_user():
 def get_dashboard_data(today=None):
     today = today or current_date()
     window_end = today + timedelta(days=UPCOMING_WINDOW_DAYS)
-    rows = get_db().execute(
+    rows = get_db().execute(text(
         """SELECT e.engagement_id, e.client_id, c.client_name, e.tax_year,
                   e.return_type, e.assigned_preparer, e.engagement_start_date,
                   e.filing_deadline, e.engagement_status,
@@ -35,7 +36,7 @@ def get_dashboard_data(today=None):
              ON ri.engagement_id = e.engagement_id AND ri.item_status = 'Outstanding'
            GROUP BY e.engagement_id
            ORDER BY e.filing_deadline ASC, e.engagement_id ASC"""
-    ).fetchall()
+    )).mappings().all()
 
     engagements = []
     upcoming_deadlines = []

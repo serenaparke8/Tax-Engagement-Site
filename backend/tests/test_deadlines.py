@@ -3,6 +3,7 @@ import unittest
 from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import patch
+from sqlalchemy import text
 
 from test_support import create_test_app, login_with_csrf, TEST_DEMO_ACCOUNTS
 
@@ -86,10 +87,7 @@ class UpcomingDeadlinesTests(unittest.TestCase):
         with self.app.app_context():
             from app.db import get_db
 
-            get_db().execute(
-                "UPDATE TAX_ENGAGEMENT SET filing_deadline = '' WHERE engagement_id = ?",
-                (engagement_id,),
-            )
+            get_db().execute(text("UPDATE TAX_ENGAGEMENT SET filing_deadline = '' WHERE engagement_id = :engagement_id"), {"engagement_id": engagement_id})
             get_db().commit()
 
         response = self.get_upcoming()

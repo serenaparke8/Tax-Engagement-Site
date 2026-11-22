@@ -1,6 +1,7 @@
 import secrets
 
 from flask import current_app, jsonify, request, session
+from sqlalchemy import text
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from ..db import get_db
@@ -8,15 +9,15 @@ from . import auth_bp
 
 
 def seed_demo_accounts(db):
-    count = db.execute("SELECT COUNT(*) FROM USERS").fetchone()[0]
+    count = db.execute(text("SELECT COUNT(*) FROM USERS")).scalar_one()
     if count == 0:
         accounts = current_app.config.get("DEMO_ACCOUNTS", ())
         if not accounts:
             return
-        db.executemany(
-            "INSERT INTO USERS (username, password_hash, display_name) VALUES (?, ?, ?)",
+        db.execute(
+            text("INSERT INTO USERS (username, password_hash, display_name) VALUES (:username, :password_hash, :display_name)"),
             [
-                (username, generate_password_hash(password), display_name)
+                {"username": username, "password_hash": generate_password_hash(password), "display_name": display_name}
                 for username, password, display_name in accounts
             ],
         )
@@ -25,7 +26,13 @@ def seed_demo_accounts(db):
 
 @auth_bp.before_app_request
 def ensure_demo_accounts():
-    seed_demo_accounts(get_db())
+    # Automatic seeding is a local SQLite convenience only. Production
+    # PostgreSQL accounts are created explicitly with the provisioning CLI.
+    if (
+        current_app.config.get("DATABASE_BACKEND") == "sqlite"
+        and current_app.config.get("TEM_ENV") != "production"
+    ):
+        seed_demo_accounts(get_db())
 
 
 @auth_bp.post("/login")
@@ -37,9 +44,9 @@ def login():
         return jsonify(error="Enter both your username and password."), 400
 
     user = get_db().execute(
-        "SELECT user_id, username, password_hash, display_name FROM USERS WHERE username = ?",
-        (username,),
-    ).fetchone()
+        text("SELECT user_id, username, password_hash, display_name FROM USERS WHERE LOWER(username) = LOWER(:username)"),
+        {"username": username},
+    ).mappings().first()
     if user is None or not check_password_hash(user["password_hash"], password):
         return jsonify(error="The username or password is incorrect."), 401
 

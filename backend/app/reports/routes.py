@@ -1,4 +1,5 @@
 from flask import jsonify, request, session
+from sqlalchemy import text
 
 from ..db import get_db
 from ..engagements.routes import ENGAGEMENT_STATUSES
@@ -36,14 +37,14 @@ def report_select_sql(where=""):
 @reports_bp.get("/criteria")
 def list_report_criteria():
     db = get_db()
-    tax_years = db.execute(
+    tax_years = db.execute(text(
         "SELECT DISTINCT tax_year FROM TAX_ENGAGEMENT ORDER BY tax_year DESC"
-    ).fetchall()
-    preparers = db.execute(
+    )).mappings().all()
+    preparers = db.execute(text(
         """SELECT DISTINCT assigned_preparer FROM TAX_ENGAGEMENT
            WHERE TRIM(assigned_preparer) <> ''
-           ORDER BY assigned_preparer COLLATE NOCASE"""
-    ).fetchall()
+           ORDER BY LOWER(assigned_preparer)"""
+    )).mappings().all()
     return jsonify(criteria={
         "statuses": list(ENGAGEMENT_STATUSES),
         "tax_years": [row["tax_year"] for row in tax_years],
@@ -69,20 +70,19 @@ def generate_engagement_report():
 
     assigned_preparer = (request.args.get("assigned_preparer") or "").strip()
     conditions = []
-    parameters = []
+    parameters = {}
     if status:
-        conditions.append("e.engagement_status = ?")
-        parameters.append(status)
+        conditions.append("e.engagement_status = :status")
+        parameters["status"] = status
     if tax_year is not None:
-        conditions.append("e.tax_year = ?")
-        parameters.append(tax_year)
+        conditions.append("e.tax_year = :tax_year")
+        parameters["tax_year"] = tax_year
     if assigned_preparer:
-        conditions.append("e.assigned_preparer = ?")
-        parameters.append(assigned_preparer)
+        conditions.append("e.assigned_preparer = :assigned_preparer")
+        parameters["assigned_preparer"] = assigned_preparer
 
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-    rows = get_db().execute(
+    rows = get_db().execute(text(
         report_select_sql(where) + " ORDER BY e.filing_deadline ASC, e.engagement_id ASC",
-        parameters,
-    ).fetchall()
+    ), parameters).mappings().all()
     return jsonify(engagements=[{field: row[field] for field in REPORT_FIELDS} for row in rows])

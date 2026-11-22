@@ -1,6 +1,6 @@
-import sqlite3
-
 from flask import jsonify, request, session
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from ..db import get_db
 from . import required_items_bp
@@ -58,28 +58,25 @@ def list_engagement_items():
         return jsonify(error="Select a valid tax engagement."), 400
 
     db = get_db()
-    engagement = db.execute(
-        "SELECT engagement_id FROM TAX_ENGAGEMENT WHERE engagement_id = ?",
-        (engagement_id,),
-    ).fetchone()
+    engagement = db.execute(text("SELECT engagement_id FROM TAX_ENGAGEMENT WHERE engagement_id = :engagement_id"), {"engagement_id": engagement_id}).first()
     if engagement is None:
         return jsonify(error="Tax engagement not found."), 404
 
-    rows = db.execute(
-        required_item_select_sql("WHERE ri.engagement_id = ? ORDER BY ri.required_item_id"),
-        (engagement_id,),
-    ).fetchall()
+    rows = db.execute(text(
+        required_item_select_sql("WHERE ri.engagement_id = :engagement_id ORDER BY ri.required_item_id")),
+        {"engagement_id": engagement_id},
+    ).mappings().all()
     return jsonify(required_items=[serialize_required_item(row) for row in rows])
 
 
 @required_items_bp.get("/outstanding")
 def list_outstanding_items():
-    rows = get_db().execute(
+    rows = get_db().execute(text(
         required_item_select_sql(
             "WHERE ri.item_status = 'Outstanding' "
-            "ORDER BY e.filing_deadline, c.client_name COLLATE NOCASE, ri.required_item_id"
+            "ORDER BY e.filing_deadline, LOWER(c.client_name), ri.required_item_id"
         )
-    ).fetchall()
+    )).mappings().all()
     return jsonify(required_items=[serialize_required_item(row) for row in rows])
 
 
@@ -98,19 +95,22 @@ def add_required_item():
 
     db = get_db()
     try:
-        db.execute("BEGIN IMMEDIATE")
-        engagement = db.execute(
-            "SELECT engagement_id FROM TAX_ENGAGEMENT WHERE engagement_id = ?",
-            (engagement_id,),
-        ).fetchone()
+        if db.dialect.name == "sqlite":
+            # Acquire SQLite's write lock before checking for duplicate rows.
+            db.exec_driver_sql("BEGIN IMMEDIATE")
+        engagement = db.execute(text(
+            "SELECT engagement_id FROM TAX_ENGAGEMENT WHERE engagement_id = :engagement_id"
+            + (" FOR UPDATE" if db.dialect.name == "postgresql" else "")),
+            {"engagement_id": engagement_id},
+        ).first()
         if engagement is None:
             db.rollback()
             return jsonify(error="Tax engagement not found."), 404
 
-        existing_descriptions = db.execute(
-            "SELECT required_item_description FROM REQUIRED_ITEM WHERE engagement_id = ?",
-            (engagement_id,),
-        ).fetchall()
+        existing_descriptions = db.execute(text(
+            "SELECT required_item_description FROM REQUIRED_ITEM WHERE engagement_id = :engagement_id"),
+            {"engagement_id": engagement_id},
+        ).mappings().all()
         normalized_description = description.strip().casefold()
         if any(row["required_item_description"].strip().casefold() == normalized_description
                for row in existing_descriptions):
@@ -119,20 +119,19 @@ def add_required_item():
                 error="That item is already listed for this engagement. Choose a different item."
             ), 409
 
-        cursor = db.execute(
+        required_item_id = db.execute(text(
             """INSERT INTO REQUIRED_ITEM (engagement_id, required_item_description)
-               VALUES (?, ?)""",
-            (engagement_id, description.strip()),
-        )
+               VALUES (:engagement_id, :description)
+               RETURNING required_item_id"""),
+            {"engagement_id": engagement_id, "description": description.strip()},
+        ).scalar_one()
         db.commit()
-    except sqlite3.IntegrityError:
+    except IntegrityError:
         db.rollback()
         return jsonify(error="The required item could not be saved."), 400
 
-    row = db.execute(
-        required_item_select_sql("WHERE ri.required_item_id = ?"),
-        (cursor.lastrowid,),
-    ).fetchone()
+    row = db.execute(text(required_item_select_sql("WHERE ri.required_item_id = :required_item_id")),
+                     {"required_item_id": required_item_id}).mappings().first()
     return jsonify(
         required_item=serialize_required_item(row),
         message="Required item added successfully.",
@@ -149,27 +148,19 @@ def update_required_item_status(required_item_id):
         return jsonify(error="Select Outstanding or Received."), 400
 
     db = get_db()
-    existing = db.execute(
-        "SELECT required_item_id FROM REQUIRED_ITEM WHERE required_item_id = ?",
-        (required_item_id,),
-    ).fetchone()
+    existing = db.execute(text("SELECT required_item_id FROM REQUIRED_ITEM WHERE required_item_id = :required_item_id"), {"required_item_id": required_item_id}).first()
     if existing is None:
         return jsonify(error="Required item not found."), 404
 
     try:
-        db.execute(
-            "UPDATE REQUIRED_ITEM SET item_status = ? WHERE required_item_id = ?",
-            (status, required_item_id),
-        )
+        db.execute(text("UPDATE REQUIRED_ITEM SET item_status = :status WHERE required_item_id = :required_item_id"), {"status": status, "required_item_id": required_item_id})
         db.commit()
-    except sqlite3.IntegrityError:
+    except IntegrityError:
         db.rollback()
         return jsonify(error="The required-item status could not be updated; the previous status was kept."), 400
 
-    row = db.execute(
-        required_item_select_sql("WHERE ri.required_item_id = ?"),
-        (required_item_id,),
-    ).fetchone()
+    row = db.execute(text(required_item_select_sql("WHERE ri.required_item_id = :required_item_id")),
+                     {"required_item_id": required_item_id}).mappings().first()
     return jsonify(
         required_item=serialize_required_item(row),
         message="Required-item status updated successfully.",
@@ -179,20 +170,14 @@ def update_required_item_status(required_item_id):
 @required_items_bp.delete("/<int:required_item_id>")
 def delete_required_item(required_item_id):
     db = get_db()
-    existing = db.execute(
-        "SELECT required_item_id FROM REQUIRED_ITEM WHERE required_item_id = ?",
-        (required_item_id,),
-    ).fetchone()
+    existing = db.execute(text("SELECT required_item_id FROM REQUIRED_ITEM WHERE required_item_id = :required_item_id"), {"required_item_id": required_item_id}).first()
     if existing is None:
         return jsonify(error="Required item not found."), 404
 
     try:
-        db.execute(
-            "DELETE FROM REQUIRED_ITEM WHERE required_item_id = ?",
-            (required_item_id,),
-        )
+        db.execute(text("DELETE FROM REQUIRED_ITEM WHERE required_item_id = :required_item_id"), {"required_item_id": required_item_id})
         db.commit()
-    except sqlite3.IntegrityError:
+    except IntegrityError:
         db.rollback()
         return jsonify(error="The required item could not be deleted."), 409
 
