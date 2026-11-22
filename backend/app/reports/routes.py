@@ -41,9 +41,13 @@ def list_report_criteria():
         "SELECT DISTINCT tax_year FROM TAX_ENGAGEMENT ORDER BY tax_year DESC"
     )).mappings().all()
     preparers = db.execute(text(
-        """SELECT DISTINCT assigned_preparer FROM TAX_ENGAGEMENT
-           WHERE TRIM(assigned_preparer) <> ''
-           ORDER BY LOWER(assigned_preparer)"""
+        """SELECT preparers.assigned_preparer
+           FROM (
+               SELECT DISTINCT assigned_preparer
+               FROM TAX_ENGAGEMENT
+               WHERE TRIM(assigned_preparer) <> ''
+           ) AS preparers
+           ORDER BY LOWER(preparers.assigned_preparer)"""
     )).mappings().all()
     return jsonify(criteria={
         "statuses": list(ENGAGEMENT_STATUSES),
