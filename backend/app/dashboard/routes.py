@@ -26,15 +26,19 @@ def get_dashboard_data(today=None):
     today = today or current_date()
     window_end = today + timedelta(days=UPCOMING_WINDOW_DAYS)
     rows = get_db().execute(text(
-        """SELECT e.engagement_id, e.client_id, c.client_name, e.tax_year,
+        """WITH required_counts AS (
+               SELECT engagement_id, COUNT(*) AS outstanding_item_count
+               FROM REQUIRED_ITEM
+               WHERE item_status = 'Outstanding'
+               GROUP BY engagement_id
+           )
+           SELECT e.engagement_id, e.client_id, c.client_name, e.tax_year,
                   e.return_type, e.assigned_preparer, e.engagement_start_date,
                   e.filing_deadline, e.engagement_status,
-                  COUNT(ri.required_item_id) AS outstanding_item_count
+                  COALESCE(rc.outstanding_item_count, 0) AS outstanding_item_count
            FROM TAX_ENGAGEMENT AS e
            JOIN CLIENT AS c ON c.client_id = e.client_id
-           LEFT JOIN REQUIRED_ITEM AS ri
-             ON ri.engagement_id = e.engagement_id AND ri.item_status = 'Outstanding'
-           GROUP BY e.engagement_id
+           LEFT JOIN required_counts AS rc ON rc.engagement_id = e.engagement_id
            ORDER BY e.filing_deadline ASC, e.engagement_id ASC"""
     )).mappings().all()
 
